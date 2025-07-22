@@ -4,7 +4,7 @@ from django.urls import reverse
 import qrcode
 from io import BytesIO
 from django.core.files import File
-
+from colorfield.fields import ColorField
 class VisitingCard(models.Model):
     name = models.CharField(max_length=100, default="John Doe", blank=True)
     designation = models.CharField(max_length=100, default="Sales Executive", blank=True)
@@ -17,8 +17,8 @@ class VisitingCard(models.Model):
 
     profile_image = models.ImageField(upload_to='profile_images/', default='profile_images/default.png', blank=True)
     logo = models.ImageField(upload_to='company_logos/', default='company_logos/default.png', blank=True)
-    extra_image = models.ImageField(upload_to='extra_images/', default='extra_images/default.png', blank=True)
-
+    qr_center_color = ColorField(default='#000000', verbose_name="QR Center Color")
+    qr_edge_color = ColorField(default='#0000FF', verbose_name="QR Edge Color")
     facebook_link = models.URLField(default="#", blank=True)
     instagram_link = models.URLField(default="#", blank=True)
     linkedin_link = models.URLField(default="#", blank=True)

@@ -38,7 +38,8 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'card',
-    'django.contrib.sites'
+    'django.contrib.sites',
+     'colorfield',
 ]
 SITE_ID = 1
 MIDDLEWARE = [

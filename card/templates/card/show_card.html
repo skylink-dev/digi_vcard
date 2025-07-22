@@ -101,6 +101,21 @@
             transition: all 0.3s ease;
         }
 
+    img {
+    image-rendering: auto;
+}
+
+img.high-quality {
+    image-rendering: crisp-edges;
+    transform: scale(1.02);
+    transition: transform 0.3s ease;
+}
+
+img.high-quality:hover {
+    transform: scale(1.05);
+}
+
+
         /* Mobile Responsive Tweaks */
         @media (max-width: 640px) {
             body {
@@ -160,17 +175,22 @@
         </div>
     </div>
 
-    <div class="p-6 text-center space-y-4 bg-gradient-to-r from-red-100 via-blue-100 to-green-100 rounded-b-2xl shadow-inner">
-        <div class="relative inline-block">
-            <div class="w-40 h-40 rounded-full p-1 bg-white bg-opacity-30 backdrop-blur-md shadow-lg border border-gray-300 hover:scale-105 transition duration-300">
-                <img src="{{ card.profile_image.url }}" alt="Profile" class="w-full h-full object-cover rounded-full shadow-inner">
-            </div>
-            <span class="absolute bottom-2 right-2 w-4 h-4 bg-green-500 border-2 border-white rounded-full shadow animate-ping"></span>
-            <span class="absolute bottom-2 right-2 w-4 h-4 bg-green-500 border-2 border-white rounded-full shadow"></span>
+   <div class="p-6 text-center space-y-4 bg-gradient-to-r from-red-100 via-blue-100 to-green-100 rounded-b-2xl shadow-inner">
+    <div class="relative inline-block">
+        <div style="width: 160px; height: 160px; border-radius: 9999px; overflow: hidden; background: white; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+            <img src="{{ card.profile_image.url }}" 
+                 alt="Profile"
+                 style="transform: scale(1.02); transition: transform 0.3s ease;"
+                 onmouseover="this.style.transform='scale(1.05)'" 
+                 onmouseout="this.style.transform='scale(1.02)'">
         </div>
-        <h3 class="text-4xl font-extrabold text-gray-800 tracking-wide animate-fadeInUp title-hover">{{ card.name }}</h3>
-        <p class="text-lg font-semibold text-gray-500 italic animate-fadeInUp title-hover">{{ card.designation }}</p>
+        <span class="absolute bottom-2 right-2 w-4 h-4 bg-green-500 border-2 border-white rounded-full shadow animate-ping"></span>
+        <span class="absolute bottom-2 right-2 w-4 h-4 bg-green-500 border-2 border-white rounded-full shadow"></span>
     </div>
+    <h3 class="text-4xl font-extrabold text-gray-800 tracking-wide animate-fadeInUp title-hover">{{ card.name }}</h3>
+    <p class="text-lg font-semibold text-gray-500 italic animate-fadeInUp title-hover">{{ card.designation }}</p>
+</div>
+
 
     <div class="bg-gray-50 p-4 mx-4 my-4 rounded-xl shadow-inner">
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">

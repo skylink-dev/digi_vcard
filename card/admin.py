@@ -3,36 +3,38 @@ from django.utils.safestring import mark_safe
 from django.urls import reverse
 from django.core import signing
 from django.contrib.sites.models import Site
-import qrcode
-from io import BytesIO
-import base64
-from PIL import Image, ImageEnhance, ImageDraw
 
+import qrcode
 from qrcode.image.styledpil import StyledPilImage
 from qrcode.image.styles.moduledrawers import RoundedModuleDrawer
+from qrcode.image.styles.colormasks import RadialGradiantColorMask
+
+from io import BytesIO
+import base64
+from PIL import Image, ImageColor
+
 from .models import VisitingCard
-from qrcode.image.styles.moduledrawers import CircleModuleDrawer
+
 
 def encrypt_id(card_id):
-    """Encrypts an ID for use in a URL."""
     return signing.dumps(card_id)
 
 
 @admin.register(VisitingCard)
 class VisitingCardAdmin(admin.ModelAdmin):
     list_display = ('name', 'company_name', 'phone')
-    # The 'qr_code_with_face' method will be displayed as a read-only field.
-    readonly_fields = ('qr_code_with_face',)
+    readonly_fields = ('qr_code_preview_with_download',)
+    fields = (
+        'name', 'designation','company_name', 'phone', 'whatsapp_number','email', 'website', 'address',
+        'profile_image', 'logo',
+        'qr_center_color', 'qr_edge_color',
+        'qr_code_preview_with_download',
+    )
 
-    def qr_code_with_face(self, obj):
-        """
-        Generates a QR code by overlaying semi-transparent dots
-        on top of the user's profile image.
-        """
+    def qr_code_preview_with_download(self, obj):
         if not obj.id:
             return "Save the card first to generate the QR code."
 
-        # --- 1. Dynamic URL Generation ---
         try:
             current_site = Site.objects.get_current()
             domain = current_site.domain
@@ -41,71 +43,69 @@ class VisitingCardAdmin(admin.ModelAdmin):
 
         signed_id = encrypt_id(obj.id)
         url_path = reverse('card_profile_signed', args=[signed_id])
+        full_url = f"https://{domain}{url_path}"
 
-        # This will give you URL like: domain/path
-        full_url = f"{domain}{url_path}"
+        # ✅ Convert Hex Color to RGB tuple
+        center_rgb = ImageColor.getrgb(obj.qr_center_color or "#000000")
+        edge_rgb = ImageColor.getrgb(obj.qr_edge_color or "#0000FF")
 
-
-        # --- 2. Generate the QR Code Layer ---
-        # The QR code will have light red dots on a transparent background.
+        # 1️⃣ Generate Styled QR Code with Selected Colors
         qr = qrcode.QRCode(
             error_correction=qrcode.constants.ERROR_CORRECT_H,
-            box_size=15,
+            box_size=10,
             border=4,
         )
         qr.add_data(full_url)
         qr.make(fit=True)
 
-        # Note the 'transparent' background color
         qr_img = qr.make_image(
             image_factory=StyledPilImage,
-            module_drawer=CircleModuleDrawer(),
-            fill_color="#000000",  # Light Red
-            back_color="transparent"
+            module_drawer=RoundedModuleDrawer(),
+            color_mask=RadialGradiantColorMask(
+                back_color=(255, 255, 255),
+                center_color=center_rgb,
+                edge_color=edge_rgb
+            )
         ).convert('RGBA')
 
-        # --- 3. Prepare the Background Face Image ---
+        # 2️⃣ Add Logo at Top-Left
         try:
-            # Open face image and ensure it's in RGBA mode
-            face_img = Image.open(obj.profile_image.path).convert('RGBA')
-        except (ValueError, FileNotFoundError):
-            return "Profile image not found. Please upload one."
+            logo_img = Image.open(obj.logo.path).convert('RGBA')
+            logo_size = (int(qr_img.size[0] * 0.15), int(qr_img.size[1] * 0.15))
+            logo_img = logo_img.resize(logo_size, Image.Resampling.LANCZOS)
+            qr_img.paste(logo_img, (10, 10), mask=logo_img)
+        except Exception:
+            pass
 
-        # Resize the face image to be the same size as the QR code
-        face_img = face_img.resize(qr_img.size, Image.Resampling.LANCZOS)
+        # 3️⃣ Add Profile at Center
+        try:
+            profile_img = Image.open(obj.profile_image.path).convert('RGBA')
+            profile_size = (int(qr_img.size[0] * 0.30), int(qr_img.size[1] * 0.30))
+            profile_img = profile_img.resize(profile_size, Image.Resampling.LANCZOS)
+            pos = ((qr_img.size[0] - profile_img.size[0]) // 2, (qr_img.size[1] - profile_img.size[1]) // 2)
+            qr_img.paste(profile_img, pos, mask=profile_img)
+        except Exception:
+            pass
 
-        # --- 4. Adjust QR Code Opacity ---
-        # Get the alpha (transparency) channel of the QR code
-        qr_alpha = qr_img.split()[2]
+        # 4️⃣ Save in different formats
+        formats = {'PNG': 'png', 'JPEG': 'jpeg', 'WEBP': 'webp'}
+        download_links = ""
+        for name, fmt in formats.items():
+            buffer = BytesIO()
+            converted_img = qr_img.convert('RGB') if fmt == 'jpeg' else qr_img
+            converted_img.save(buffer, format=fmt.upper())
+            img_data = base64.b64encode(buffer.getvalue()).decode()
+            download_links += f'<a download="qr_code.{fmt}" href="data:image/{fmt};base64,{img_data}">Download {name}</a><br>'
 
-        # Enhance the alpha channel to make the dots semi-transparent.
-        # A factor of 0.7 makes the dots 70% opaque. Lower numbers make them more transparent.
-        qr_alpha = ImageEnhance.Brightness(qr_alpha).enhance(0.8)
-        
-        # Put the modified alpha channel back into the QR image
-        qr_img.putalpha(qr_alpha)
+        # 5️⃣ Show in Admin
+        preview_buffer = BytesIO()
+        qr_img.save(preview_buffer, format="PNG")
+        preview_data = base64.b64encode(preview_buffer.getvalue()).decode()
 
-        # --- 5. Combine the Face and QR Code ---
-        # Paste the semi-transparent QR code directly onto the face image
-        combined_img = Image.alpha_composite(face_img, qr_img)
-        
-        # --- 6. Add a Final White Border (Optional, but looks nice) ---
-        border_size = 15
-        bordered_img = Image.new(
-            'RGBA',
-            (combined_img.width + border_size * 2, combined_img.height + border_size * 2),
-            (255, 25, 25, 25)
-        )
-        bordered_img.paste(combined_img, (border_size, border_size))
+        return mark_safe(f'''
+            <img src="data:image/png;base64,{preview_data}" width="300"/><br>
+            <small>{full_url}</small><br><br>
+            {download_links}
+        ''')
 
-
-        # --- 7. Convert to Base64 for Admin Preview ---
-        buffer = BytesIO()
-        bordered_img.save(buffer, format="PNG")
-        img_str = base64.b64encode(buffer.getvalue()).decode()
-
-        return mark_safe(f'<img src="data:image/png;base64,{img_str}" width="300" /><br><small>{full_url}</small>')
-
-
-    # Set a user-friendly name for the field in the Django admin
-    qr_code_with_face.short_description = "QR Code Preview"
+    qr_code_preview_with_download.short_description = "Styled QR with Download Options"
